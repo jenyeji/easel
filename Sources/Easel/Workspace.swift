@@ -30,6 +30,12 @@ final class Workspace: ObservableObject {
     @Published var edit = PhotoEdit() {
         didSet {
             if edit != oldValue { scheduleLibrarySave() }
+            if edit.colorFix != oldValue.colorFix || edit.isChecker != oldValue.isChecker {
+                refreshColorFix()
+            }
+            if edit.isChecker, edit.quad != oldValue.quad || edit.chartID != oldValue.chartID {
+                scheduleChartRead()
+            }
             // Keep the "After" view up to date when the corners, size or orientation change.
             guard viewMode == .result else { return }
             if edit.quad != oldValue.quad
@@ -60,6 +66,15 @@ final class Workspace: ObservableObject {
     @Published var cardMessage: String?
     /// 0 to 1 while photos are being copied off a card, otherwise nil.
     @Published var cardImportProgress: Double?
+    /// True while Easel is reading a color checker.
+    @Published var isReadingChart = false
+    /// A note shown when the chart couldn't be found or read.
+    @Published var chartStatus: String?
+
+    /// The open photo before any color fix. `photo` is this with the fix applied.
+    var originalPhoto: LoadedPhoto?
+    var chartReadTask: Task<Void, Never>?
+    var colorFixToken = UUID()
 
     private let settings = AppSettings.shared
     private var loadToken = UUID()
@@ -121,7 +136,7 @@ final class Workspace: ObservableObject {
         let newItems = byBaseName.values
             .filter { !alreadyOpen.contains($0.standardizedFileURL) }
             .sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
-            .map { PhotoItem(url: $0) }
+            .map { PhotoItem(url: $0, captureDate: ImageProcessor.captureDate(of: $0)) }
 
         guard !newItems.isEmpty else {
             if found.isEmpty { status = "No photos found there." }
@@ -154,6 +169,9 @@ final class Workspace: ObservableObject {
         let previousEdit = edit
         selectedID = id
         photo = nil
+        originalPhoto = nil
+        chartStatus = nil
+        chartReadTask?.cancel()
         resultImage = nil
         viewMode = .corners
         errorMessage = nil
@@ -169,6 +187,14 @@ final class Workspace: ObservableObject {
     func selectNext() {
         guard let index = selectedIndex, index + 1 < items.count else { return }
         select(items[index + 1].id)
+    }
+
+    /// The next photo that isn't a checker photo.
+    func selectNextPainting() {
+        guard let index = selectedIndex else { return }
+        if let next = items[(index + 1)...].first(where: { !isChecker($0) }) {
+            select(next.id)
+        }
     }
 
     func selectPrevious() {
@@ -188,8 +214,16 @@ final class Workspace: ObservableObject {
             do {
                 let loaded = try await runInBackground { try ImageProcessor.load(url) }
                 guard token == loadToken else { return }
-                photo = loaded
-                if edit.quad == nil {
+                originalPhoto = loaded
+                var shown = loaded
+                if let matrix = activeColorFix?.fix.matrix {
+                    shown = try await runInBackground { try loaded.applyingColorFix(matrix) }
+                }
+                guard token == loadToken else { return }
+                photo = shown
+                if edit.isChecker {
+                    if edit.quad == nil { findChart() }
+                } else if edit.quad == nil {
                     let cg = loaded.previewCG
                     let detected = try? await runInBackground { ImageProcessor.detectPainting(in: cg) }
                     guard token == loadToken else { return }
@@ -237,7 +271,7 @@ final class Workspace: ObservableObject {
 
     func renderResult() {
         guard let loaded = photo, let quad = edit.quad,
-              let aspect = edit.aspect(presets: settings.presets) else {
+              let aspect = resultAspect(photo: loaded, quad: quad) else {
             resultImage = nil
             return
         }
@@ -252,10 +286,18 @@ final class Workspace: ObservableObject {
         }
     }
 
+    /// The painting's proportions, or the chart's for a checker photo.
+    private func resultAspect(photo: LoadedPhoto, quad: Quad) -> (width: Double, height: Double)? {
+        guard edit.isChecker else { return edit.aspect(presets: settings.presets) }
+        let chart = ColorChart.chart(id: edit.chartID)
+        let long = Double(max(chart.columns, chart.rows)), short = Double(min(chart.columns, chart.rows))
+        return quad.looksLandscape(imageSize: photo.pixelSize) ? (long, short) : (short, long)
+    }
+
     // MARK: Saving
 
     var canSave: Bool {
-        photo != nil && edit.quad != nil && edit.aspect(presets: settings.presets) != nil && !isSaving
+        photo != nil && edit.quad != nil && edit.aspect(presets: settings.presets) != nil && !isSaving && !edit.isChecker
     }
 
     /// The name the naming style would give this photo (ignoring any typed name).
@@ -324,7 +366,7 @@ final class Workspace: ObservableObject {
                 status = "Saved \(fullURL.lastPathComponent) (\(Int(size.width)) × \(Int(size.height)) px) and the web version."
                 isSaving = false
                 if settings.goToNextAfterSave, selectedID == itemID {
-                    selectNext()
+                    selectNextPainting()
                 }
             } catch {
                 errorMessage = error.localizedDescription

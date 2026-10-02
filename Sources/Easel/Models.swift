@@ -110,6 +110,12 @@ struct PhotoEdit: Equatable, Codable {
     var customLong: Double = 14
     var orientation: Orientation = .portrait
     var quad: Quad?
+    /// This photo is of a color checker, used to work out a color fix. Its corners go on the chart.
+    var isChecker = false
+    /// Which chart is in a checker photo.
+    var chartID = ColorChart.classic.id
+    /// Which color fix a painting photo uses.
+    var colorFix: ColorFixChoice = .automatic
 
     /// "2026-09" (or just "2026" with no month), used for {date} in file names.
     var dateForFileName: String {
@@ -160,8 +166,20 @@ struct PhotoEdit: Equatable, Codable {
         next.customShort = customShort
         next.customLong = customLong
         next.orientation = orientation
+        next.chartID = chartID
+        if !isChecker { next.colorFix = colorFix }
         return next
     }
+}
+
+/// Which color fix a painting photo uses.
+enum ColorFixChoice: Codable, Hashable {
+    /// The checker photo taken most recently before this photo on the same day
+    /// (or, if there isn't one, the closest one taken later that day).
+    case automatic
+    case off
+    /// A specific checker photo.
+    case checker(PhotoItem.ID)
 }
 
 /// A photo in the list on the left. The list is saved, so it's still there next time you open Easel.
@@ -173,6 +191,10 @@ struct PhotoItem: Identifiable, Codable {
     var savedFullURL: URL?
     var savedWebURL: URL?
     var savedEdit: PhotoEdit?
+    /// When the photo was taken (from the camera's info), used to match photos with checker photos.
+    var captureDate: Date?
+    /// For checker photos: the color fix worked out from the chart.
+    var colorFix: ColorFix?
 
     var savedName: String? { savedFullURL?.lastPathComponent }
 
@@ -292,5 +314,8 @@ extension PhotoEdit {
         customLong = value(.customLong, defaults.customLong)
         orientation = value(.orientation, defaults.orientation)
         quad = value(.quad, defaults.quad)
+        isChecker = value(.isChecker, defaults.isChecker)
+        chartID = value(.chartID, defaults.chartID)
+        colorFix = value(.colorFix, defaults.colorFix)
     }
 }

@@ -21,7 +21,11 @@ extension Workspace {
               let saved = try? JSONDecoder().decode(SavedLibrary.self, from: data) else { return }
 
         // Photos that were moved or deleted since last time can't be opened, so leave them out.
-        let found = saved.items.filter { FileManager.default.fileExists(atPath: $0.url.path) }
+        var found = saved.items.filter { FileManager.default.fileExists(atPath: $0.url.path) }
+        // Lists saved by older versions of Easel don't have the dates photos were taken.
+        for index in found.indices where found[index].captureDate == nil {
+            found[index].captureDate = ImageProcessor.captureDate(of: found[index].url)
+        }
         items = found
 
         if let id = saved.selectedID, found.contains(where: { $0.id == id }) {

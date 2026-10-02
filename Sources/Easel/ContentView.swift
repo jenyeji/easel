@@ -106,15 +106,21 @@ struct PhotoListView: View {
             set: { workspace.select($0) }
         )) {
             ForEach(workspace.items) { item in
+                let checker = workspace.isChecker(item)
                 HStack(spacing: 8) {
-                    Image(systemName: item.savedName == nil ? "photo" : "checkmark.circle.fill")
-                        .foregroundColor(item.savedName == nil ? Color.secondary : Color.green)
+                    Image(systemName: checker ? "checkerboard.rectangle"
+                                              : (item.savedName == nil ? "photo" : "checkmark.circle.fill"))
+                        .foregroundColor(checker ? Color.purple : (item.savedName == nil ? Color.secondary : Color.green))
                         .frame(width: 18)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(item.name)
                             .lineLimit(1)
                             .truncationMode(.middle)
-                        if let saved = item.savedName {
+                        if checker {
+                            Text("Color checker")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        } else if let saved = item.savedName {
                             Text(saved)
                                 .font(.caption)
                                 .foregroundColor(.secondary)
@@ -135,8 +141,9 @@ struct PhotoListView: View {
         }
         .safeAreaInset(edge: .bottom) {
             if !workspace.items.isEmpty {
-                let saved = workspace.items.filter { $0.savedName != nil }.count
-                Text("\(saved) of \(workspace.items.count) saved")
+                let paintings = workspace.items.filter { !workspace.isChecker($0) }
+                let saved = paintings.filter { $0.savedName != nil }.count
+                Text("\(saved) of \(paintings.count) saved")
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity)
@@ -190,11 +197,17 @@ struct CanvasView: View {
                         CornerEditorView(image: photo.previewCG, quad: Binding(
                             get: { workspace.edit.quad ?? .inset },
                             set: { workspace.edit.quad = $0 }
-                        ))
+                        ), chartGrid: chartGrid)
                     }
                 case .result:
                     ResultView(image: workspace.resultImage)
                 }
+            }
+
+            if workspace.isReadingChart && workspace.edit.quad == nil {
+                ProgressView("Looking for the chart…")
+                    .padding(20)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
             }
 
             if workspace.isLoading {
@@ -203,6 +216,14 @@ struct CanvasView: View {
                     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
             }
         }
+    }
+}
+
+extension CanvasView {
+    var chartGrid: (columns: Int, rows: Int)? {
+        guard workspace.edit.isChecker else { return nil }
+        let chart = ColorChart.chart(id: workspace.edit.chartID)
+        return (chart.columns, chart.rows)
     }
 }
 
@@ -232,7 +253,12 @@ struct StatusBar: View {
     }
 
     private var hint: String {
-        workspace.viewMode == .corners
+        if workspace.edit.isChecker {
+            return workspace.viewMode == .corners
+                ? "Drag the corners onto the outer corners of the colored squares. Each small white square should sit inside one color."
+                : "The chart, straightened, with the color fix."
+        }
+        return workspace.viewMode == .corners
             ? "Drag each corner onto a corner of the painting. A magnifier appears while you drag."
             : "This is how the saved image will look."
     }
@@ -247,6 +273,22 @@ struct InspectorView: View {
     var body: some View {
         VStack(spacing: 0) {
             Form {
+                Section {
+                    Toggle("Color checker photo", isOn: Binding(
+                        get: { workspace.edit.isChecker },
+                        set: { workspace.setChecker($0) }
+                    ))
+                } footer: {
+                    Text(workspace.edit.isChecker
+                         ? "Easel reads the chart in this photo and uses it to fix the colors of photos taken in the same light."
+                         : "Turn this on for a photo of your color checker chart.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                if workspace.edit.isChecker {
+                    CheckerPanel()
+                } else {
                 Section("Painting") {
                     TextField("Title", text: $workspace.edit.title, prompt: Text("Sunset over Pescadero"))
                     TextField("Artist", text: $workspace.edit.artist,
@@ -310,6 +352,8 @@ struct InspectorView: View {
                     .pickerStyle(.segmented)
                 }
 
+                colorSection
+
                 fileNameSection
 
                 saveFolderSection
@@ -328,9 +372,11 @@ struct InspectorView: View {
                         fileRow(icon: "globe", title: "Web", name: names.web, detail: webDetail)
                     }
                 }
+                }
             }
             .formStyle(.grouped)
 
+            if !workspace.edit.isChecker {
             Divider()
 
             VStack(spacing: 8) {
@@ -381,6 +427,51 @@ struct InspectorView: View {
             }
             .padding(14)
             .animation(.easeInOut(duration: 0.2), value: workspace.isCurrentPhotoSaved)
+            }
+        }
+    }
+
+    // MARK: Color
+
+    private var colorSection: some View {
+        Section {
+            Picker("Color fix", selection: $workspace.edit.colorFix) {
+                Text(automaticLabel).tag(ColorFixChoice.automatic)
+                Text("Off").tag(ColorFixChoice.off)
+                if !workspace.checkerPhotos.isEmpty {
+                    Divider()
+                    ForEach(workspace.checkerPhotos) { item in
+                        Text(workspace.checkerLabel(item)).tag(ColorFixChoice.checker(item.id))
+                    }
+                }
+            }
+            .help("Fix this photo's colors using a photo of your color checker taken in the same light.")
+        } header: {
+            Text("Color")
+        } footer: {
+            Text(colorFooter)
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+    }
+
+    private var automaticLabel: String {
+        guard let item = workspace.selectedItem,
+              let found = workspace.colorFix(for: item, choice: .automatic) else { return "Automatic" }
+        return "Automatic (\(workspace.checkerLabel(found.source)))"
+    }
+
+    private var colorFooter: String {
+        if let active = workspace.activeColorFix {
+            return "Using the fix from \(workspace.checkerLabel(active.source)). Press After (⌘B) to see it."
+        }
+        if workspace.checkerPhotos.isEmpty {
+            return "To fix colors, add a photo of your color checker taken in the same light, and turn on Color checker photo for it."
+        }
+        switch workspace.edit.colorFix {
+        case .automatic: return "No checker photo from the same day. Pick one above to use it."
+        case .off: return "Colors are left as the camera took them."
+        case .checker: return "That checker photo isn't in the list anymore. Pick another one."
         }
     }
 

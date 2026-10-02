@@ -35,6 +35,21 @@ Handy keys: ⌘[ and ⌘] go to the previous and next photo, ⌘E finds the edge
 
 Easel remembers your photo list. Quit and reopen, and every photo is still there with its corners, info and saved check, and the photo you had open comes back. Right-click a photo and choose **Remove from List** to take it off. This doesn't delete the file. Photos added with Add Photos stay where they are on your Mac. If you move or delete one, Easel takes it off the list next time it opens.
 
+## Color checker
+
+If you have a ColorChecker (like the Calibrite ColorChecker Classic Mini), Easel can fix your photos' colors so the paint looks true to life.
+
+1. At the start of a session, take one photo of the checker in the same spot and light as your paintings, with the same camera settings. Take a new one if the light changes.
+2. In Easel, open that photo and turn on **Color checker photo** at the top of the right panel. Easel finds the chart and puts the corners on it. Drag them onto the outer corners of the colored squares (not the black frame) if needed. Each small white square on top should sit inside one color.
+3. The panel shows how well it worked: how far off the colors were, how close they are with the fix (under 2 is hard to see), and the chart's squares before and after. The dot in each square is the true color.
+4. Photos taken after the checker photo on the same day use its fix automatically, until the next checker photo. Each painting's **Color** menu shows which fix it's using. You can pick a different one or turn it off. Press **After** (⌘B) to see the result. The saved JPGs use it too.
+
+Checker photos have a purple icon in the list and aren't saved as JPGs.
+
+**Charts:** the ColorChecker Classic full size, Mini, Nano and the 24-square page of the ColorChecker Passport all have the same colors. Charts made before 2015 have slightly different colors, so pick that one in the **Chart** menu if yours is older.
+
+**Tips:** light the chart evenly with no glare. Tilting it slightly away from the lights helps. Don't let the white square get too bright. Easel warns you if it's overexposed. The Mini is small, so fill at least a tenth of the photo's width with it.
+
 ## Settings
 
 Click **Settings** (the gear, top right), the **More options in Settings** link under the Save button, or press ⌘,.

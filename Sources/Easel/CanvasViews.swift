@@ -17,6 +17,8 @@ func fitRect(_ size: CGSize, in bounds: CGSize, padding: CGFloat) -> CGRect {
 struct CornerEditorView: View {
     let image: CGImage
     @Binding var quad: Quad
+    /// For checker photos: the chart's grid, so the measured spot in each square can be shown.
+    var chartGrid: (columns: Int, rows: Int)? = nil
 
     @State private var activeCorner: Corner?
     @State private var dragStart: CGPoint?
@@ -52,6 +54,19 @@ struct CornerEditorView: View {
                 .stroke(Color.accentColor, lineWidth: 1.5)
                 .allowsHitTesting(false)
 
+                if let chartGrid {
+                    // The spot Easel measures in each square. Each should sit inside one color.
+                    Path { path in
+                        for spot in measuredSpots(chartGrid, fit: fit, imageSize: imageSize) {
+                            path.addLines(spot)
+                            path.closeSubpath()
+                        }
+                    }
+                    .stroke(Color.white, lineWidth: 1)
+                    .shadow(color: .black.opacity(0.9), radius: 1)
+                    .allowsHitTesting(false)
+                }
+
                 ForEach(Corner.allCases) { corner in
                     handle(for: corner, fit: fit)
                 }
@@ -65,6 +80,26 @@ struct CornerEditorView: View {
 
     private func screenPoint(_ p: CGPoint, _ fit: CGRect) -> CGPoint {
         CGPoint(x: fit.minX + p.x * fit.width, y: fit.minY + p.y * fit.height)
+    }
+
+    private func measuredSpots(_ grid: (columns: Int, rows: Int), fit: CGRect, imageSize: CGSize) -> [[CGPoint]] {
+        let long = max(grid.columns, grid.rows), short = min(grid.columns, grid.rows)
+        let landscape = quad.looksLandscape(imageSize: imageSize)
+        let columns = landscape ? long : short
+        let rows = landscape ? short : long
+        let halfU = ChartReader.sampleFraction / 2 / Double(columns)
+        let halfV = ChartReader.sampleFraction / 2 / Double(rows)
+        var spots: [[CGPoint]] = []
+        for row in 0..<rows {
+            for column in 0..<columns {
+                let u = (Double(column) + 0.5) / Double(columns)
+                let v = (Double(row) + 0.5) / Double(rows)
+                let corners = [(u - halfU, v - halfV), (u + halfU, v - halfV),
+                               (u + halfU, v + halfV), (u - halfU, v + halfV)]
+                spots.append(corners.map { screenPoint(quad.point(u: $0.0, v: $0.1), fit) })
+            }
+        }
+        return spots
     }
 
     private func outline(_ fit: CGRect) -> [CGPoint] {

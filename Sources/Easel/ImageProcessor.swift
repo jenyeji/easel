@@ -62,6 +62,21 @@ enum ImageProcessor {
         return rawExtensions.contains(ext) || otherExtensions.contains(ext)
     }
 
+    /// When the photo was taken, from the camera's info, or the file's date if that's missing.
+    static func captureDate(of url: URL) -> Date? {
+        if let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+           let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+           let exif = properties[kCGImagePropertyExifDictionary] as? [CFString: Any],
+           let text = exif[kCGImagePropertyExifDateTimeOriginal] as? String {
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.dateFormat = "yyyy:MM:dd HH:mm:ss"
+            if let date = formatter.date(from: text) { return date }
+        }
+        let values = try? url.resourceValues(forKeys: [.creationDateKey, .contentModificationDateKey])
+        return values?.creationDate ?? values?.contentModificationDate
+    }
+
     static func isRaw(_ url: URL) -> Bool {
         rawExtensions.contains(url.pathExtension.lowercased())
     }
