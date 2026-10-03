@@ -29,8 +29,8 @@ struct PhotoInfo {
     var medium: String
     var size: String
     var recordID: String
-    /// When the photo was taken, copied from the original so the saved JPGs keep it.
-    var captureDateFields: [String: Any] = [:]
+    /// The JPG's date: when you saved it.
+    var dateFields: [String: Any] = [:]
 }
 
 struct ExportOptions {
@@ -79,29 +79,20 @@ enum ImageProcessor {
         return values?.creationDate ?? values?.contentModificationDate
     }
 
-    /// The camera's "when it was taken" fields from the original photo, to copy into the saved JPGs.
-    /// If the photo has none (a scan, a screenshot), `fallback` is used.
-    static func captureDateFields(of url: URL, fallback: Date?) -> [String: Any] {
-        let keys = [kCGImagePropertyExifDateTimeOriginal, kCGImagePropertyExifSubsecTimeOriginal,
-                    kCGImagePropertyExifOffsetTimeOriginal, kCGImagePropertyExifDateTimeDigitized,
-                    kCGImagePropertyExifSubsecTimeDigitized, kCGImagePropertyExifOffsetTimeDigitized]
-        var fields: [String: Any] = [:]
-        if let source = CGImageSourceCreateWithURL(url as CFURL, nil),
-           let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any],
-           let exif = properties[kCGImagePropertyExifDictionary as String] as? [String: Any] {
-            for key in keys {
-                if let value = exif[key as String] { fields[key as String] = value }
-            }
-        }
-        if fields[kCGImagePropertyExifDateTimeOriginal as String] == nil, let fallback {
-            let formatter = DateFormatter()
-            formatter.locale = Locale(identifier: "en_US_POSIX")
-            formatter.dateFormat = "yyyy:MM:dd HH:mm:ss"
-            let text = formatter.string(from: fallback)
-            fields[kCGImagePropertyExifDateTimeOriginal as String] = text
-            fields[kCGImagePropertyExifDateTimeDigitized as String] = text
-        }
-        return fields
+    /// The date fields for a saved JPG, set to `date` (the moment you press Save).
+    static func dateFields(for date: Date) -> [String: Any] {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy:MM:dd HH:mm:ss"
+        let text = formatter.string(from: date)
+        formatter.dateFormat = "xxx"   // time zone, like -07:00
+        let zone = formatter.string(from: date)
+        return [
+            kCGImagePropertyExifDateTimeOriginal as String: text,
+            kCGImagePropertyExifDateTimeDigitized as String: text,
+            kCGImagePropertyExifOffsetTimeOriginal as String: zone,
+            kCGImagePropertyExifOffsetTimeDigitized as String: zone
+        ]
     }
 
     static func isRaw(_ url: URL) -> Bool {
@@ -253,9 +244,8 @@ enum ImageProcessor {
 
         var tiff: [String: Any] = [:]
         var iptc: [String: Any] = [:]
-        // The date the photo was taken stays as the camera recorded it. The painting's own date
-        // only goes in the description above.
-        let exif = info.captureDateFields
+        // The JPG's date is when you saved it. The painting's own date only goes in the description above.
+        let exif = info.dateFields
         if let taken = exif[kCGImagePropertyExifDateTimeOriginal as String] as? String {
             // "2026:10:02 14:05:33" becomes "20261002" and "140533" for the IPTC date fields.
             let digits = taken.filter(\.isNumber)
@@ -289,6 +279,9 @@ enum ImageProcessor {
             kCGImagePropertyDPIHeight as String: dpi,
             kCGImagePropertyOrientation as String: 1
         ]
+        if let saved = exif[kCGImagePropertyExifDateTimeOriginal as String] {
+            tiff[kCGImagePropertyTIFFDateTime as String] = saved
+        }
         if !tiff.isEmpty { properties[kCGImagePropertyTIFFDictionary as String] = tiff }
         if !iptc.isEmpty { properties[kCGImagePropertyIPTCDictionary as String] = iptc }
         if !exif.isEmpty { properties[kCGImagePropertyExifDictionary as String] = exif }

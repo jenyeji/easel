@@ -424,8 +424,7 @@ final class Workspace: ObservableObject {
                              month: edit.month, year: edit.year,
                              medium: settings.medium(for: edit), size: edit.sizeLabel(presets: settings.presets),
                              recordID: edit.recordID.trimmingCharacters(in: .whitespacesAndNewlines),
-                             captureDateFields: ImageProcessor.captureDateFields(of: items[index].url,
-                                                                                 fallback: items[index].captureDate))
+                             dateFields: ImageProcessor.dateFields(for: Date()))
         let itemID = items[index].id
         let savedEdit = edit
 

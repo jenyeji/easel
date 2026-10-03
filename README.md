@@ -88,7 +88,7 @@ Easel writes these details into both JPGs, so they show up in Lightroom, Bridge,
 
 - **Title**
 - **Artist**, plus a copyright line like "© 2026 Your Name"
-- **Date taken**, copied from your camera, so the JPGs still show when the photo was taken. The painting's own date (the Date you type) only goes in the description.
+- **Date**: when you saved the JPG. The painting's own date (the Date you type) only goes in the description.
 - **Description**, like "Sunset over Pescadero by Jane Doe, Oil, 11x14 in (September 2026). Record ID: JS-014"
 - **Record ID** (Lightroom and Bridge call this field "Job Identifier")
 
