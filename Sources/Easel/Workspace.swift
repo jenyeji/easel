@@ -423,7 +423,9 @@ final class Workspace: ObservableObject {
         let info = PhotoInfo(title: edit.title, artist: settings.artist(for: edit),
                              month: edit.month, year: edit.year,
                              medium: settings.medium(for: edit), size: edit.sizeLabel(presets: settings.presets),
-                             recordID: edit.recordID.trimmingCharacters(in: .whitespacesAndNewlines))
+                             recordID: edit.recordID.trimmingCharacters(in: .whitespacesAndNewlines),
+                             captureDateFields: ImageProcessor.captureDateFields(of: items[index].url,
+                                                                                 fallback: items[index].captureDate))
         let itemID = items[index].id
         let savedEdit = edit
 

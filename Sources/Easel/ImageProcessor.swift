@@ -29,6 +29,8 @@ struct PhotoInfo {
     var medium: String
     var size: String
     var recordID: String
+    /// When the photo was taken, copied from the original so the saved JPGs keep it.
+    var captureDateFields: [String: Any] = [:]
 }
 
 struct ExportOptions {
@@ -75,6 +77,31 @@ enum ImageProcessor {
         }
         let values = try? url.resourceValues(forKeys: [.creationDateKey, .contentModificationDateKey])
         return values?.creationDate ?? values?.contentModificationDate
+    }
+
+    /// The camera's "when it was taken" fields from the original photo, to copy into the saved JPGs.
+    /// If the photo has none (a scan, a screenshot), `fallback` is used.
+    static func captureDateFields(of url: URL, fallback: Date?) -> [String: Any] {
+        let keys = [kCGImagePropertyExifDateTimeOriginal, kCGImagePropertyExifSubsecTimeOriginal,
+                    kCGImagePropertyExifOffsetTimeOriginal, kCGImagePropertyExifDateTimeDigitized,
+                    kCGImagePropertyExifSubsecTimeDigitized, kCGImagePropertyExifOffsetTimeDigitized]
+        var fields: [String: Any] = [:]
+        if let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+           let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any],
+           let exif = properties[kCGImagePropertyExifDictionary as String] as? [String: Any] {
+            for key in keys {
+                if let value = exif[key as String] { fields[key as String] = value }
+            }
+        }
+        if fields[kCGImagePropertyExifDateTimeOriginal as String] == nil, let fallback {
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.dateFormat = "yyyy:MM:dd HH:mm:ss"
+            let text = formatter.string(from: fallback)
+            fields[kCGImagePropertyExifDateTimeOriginal as String] = text
+            fields[kCGImagePropertyExifDateTimeDigitized as String] = text
+        }
+        return fields
     }
 
     static func isRaw(_ url: URL) -> Bool {
@@ -226,9 +253,16 @@ enum ImageProcessor {
 
         var tiff: [String: Any] = [:]
         var iptc: [String: Any] = [:]
-        if info.month > 0 {
-            // This field needs a full day, so the 1st of the month is used.
-            iptc[kCGImagePropertyIPTCDateCreated as String] = String(format: "%04d%02d01", info.year, info.month)
+        // The date the photo was taken stays as the camera recorded it. The painting's own date
+        // only goes in the description above.
+        let exif = info.captureDateFields
+        if let taken = exif[kCGImagePropertyExifDateTimeOriginal as String] as? String {
+            // "2026:10:02 14:05:33" becomes "20261002" and "140533" for the IPTC date fields.
+            let digits = taken.filter(\.isNumber)
+            if digits.count >= 14 {
+                iptc[kCGImagePropertyIPTCDateCreated as String] = String(digits.prefix(8))
+                iptc[kCGImagePropertyIPTCTimeCreated as String] = String(digits.dropFirst(8).prefix(6))
+            }
         }
         if !info.artist.isEmpty {
             tiff[kCGImagePropertyTIFFArtist as String] = info.artist
@@ -257,6 +291,7 @@ enum ImageProcessor {
         ]
         if !tiff.isEmpty { properties[kCGImagePropertyTIFFDictionary as String] = tiff }
         if !iptc.isEmpty { properties[kCGImagePropertyIPTCDictionary as String] = iptc }
+        if !exif.isEmpty { properties[kCGImagePropertyExifDictionary as String] = exif }
 
         CGImageDestinationAddImage(destination, cg, properties as CFDictionary)
         guard CGImageDestinationFinalize(destination) else {
