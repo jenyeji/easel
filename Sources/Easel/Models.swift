@@ -38,6 +38,17 @@ struct Quad: Equatable, Codable {
         }
     }
 
+    /// The outline's average width and height in pixels.
+    func sideLengths(imageSize: CGSize) -> (width: Double, height: Double) {
+        func dist(_ a: CGPoint, _ b: CGPoint) -> Double {
+            let dx = Double((a.x - b.x) * imageSize.width)
+            let dy = Double((a.y - b.y) * imageSize.height)
+            return (dx * dx + dy * dy).squareRoot()
+        }
+        return ((dist(topLeft, topRight) + dist(bottomLeft, bottomRight)) / 2,
+                (dist(topLeft, bottomLeft) + dist(topRight, bottomRight)) / 2)
+    }
+
     /// True when the painting outlined by these corners is wider than it is tall.
     /// `imageSize` is needed because the corners are stored as fractions.
     func looksLandscape(imageSize: CGSize) -> Bool {

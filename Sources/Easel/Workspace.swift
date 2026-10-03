@@ -56,6 +56,8 @@ final class Workspace: ObservableObject {
         didSet { if viewMode == .result && oldValue != .result { renderResult() } }
     }
     @Published var resultImage: CGImage?
+    /// Set when the After view couldn't be made.
+    @Published var resultError: String?
     @Published var status: String?
     @Published var errorMessage: String?
     /// A camera memory card that was just plugged in. Setting this shows the "Import?" question.
@@ -178,9 +180,7 @@ final class Workspace: ObservableObject {
 
         guard let index = selectedIndex else { return }
         edit = items[index].edit ?? previousEdit.carriedOver()
-        if edit.presetID == nil, !edit.useCustomSize {
-            edit.presetID = settings.presets.first(where: { $0.label == "11x14" })?.id ?? settings.presets.first?.id
-        }
+        // With no size yet, one is guessed from the painting's shape once its edges are found.
         loadPhoto(items[index].url)
     }
 
@@ -228,6 +228,8 @@ final class Workspace: ObservableObject {
                     let detected = try? await runInBackground { ImageProcessor.detectPainting(in: cg) }
                     guard token == loadToken else { return }
                     applyDetected(detected, photo: loaded)
+                } else {
+                    guessSizeIfNeeded()
                 }
             } catch {
                 guard token == loadToken else { return }
@@ -244,6 +246,55 @@ final class Workspace: ObservableObject {
         updated.orientation = q.looksLandscape(imageSize: photo.pixelSize) ? .landscape : .portrait
         edit = updated
         status = quad == nil ? "Couldn't find the edges. Drag the corners onto the painting." : nil
+        if quad != nil {
+            guessSizeIfNeeded()
+        } else if edit.sides(presets: settings.presets) == nil, !edit.useCustomSize {
+            // The edges weren't found, so the shape can't be trusted. Start from 11x14.
+            edit.presetID = settings.presets.first(where: { $0.label == "11x14" })?.id ?? settings.presets.first?.id
+        }
+    }
+
+    // MARK: Canvas size
+
+    /// When no size is picked (or the picked one was removed in Settings), picks the size
+    /// closest to the painting's shape.
+    func guessSizeIfNeeded() {
+        guard !edit.isChecker, !edit.useCustomSize, edit.sides(presets: settings.presets) == nil,
+              let quad = edit.quad, let pixelSize = photo?.pixelSize,
+              let preset = closestPreset(to: quad, imageSize: pixelSize) else { return }
+        edit.presetID = preset.id
+        status = "No size was picked, so Easel chose \(preset.label), the closest to the painting's shape. Change it if that's not right."
+    }
+
+    private func closestPreset(to quad: Quad, imageSize: CGSize) -> SizePreset? {
+        let sides = quad.sideLengths(imageSize: imageSize)
+        guard sides.width > 1, sides.height > 1 else { return nil }
+        let shape = max(sides.width, sides.height) / min(sides.width, sides.height)
+        func mismatch(_ preset: SizePreset) -> Double { abs(log(preset.long / preset.short / shape)) }
+        guard let best = settings.presets.min(by: { mismatch($0) < mismatch($1) }) else { return nil }
+
+        // Several sizes can share a shape (8x10 and 16x20). Pick the one used most in the list.
+        let sameShape = settings.presets.filter { abs(mismatch($0) - mismatch(best)) < 0.005 }
+        var uses: [UUID: Int] = [:]
+        for item in items {
+            if let id = item.edit?.presetID { uses[id, default: 0] += 1 }
+        }
+        var pick = sameShape.first ?? best
+        for preset in sameShape where uses[preset.id, default: 0] > uses[pick.id, default: 0] {
+            pick = preset
+        }
+        return pick
+    }
+
+    /// Why the After view can't show the painting, if something's missing.
+    var resultProblem: String? {
+        guard photo != nil, edit.quad != nil, !edit.isChecker else { return nil }
+        if edit.sides(presets: settings.presets) == nil {
+            return edit.useCustomSize
+                ? "Type the custom size in the panel on the right to see the straightened painting."
+                : "Pick a canvas size in the panel on the right to see the straightened painting."
+        }
+        return resultError
     }
 
     // MARK: Corner tools
@@ -270,6 +321,7 @@ final class Workspace: ObservableObject {
     }
 
     func renderResult() {
+        resultError = nil
         guard let loaded = photo, let quad = edit.quad,
               let aspect = resultAspect(photo: loaded, quad: quad) else {
             resultImage = nil
@@ -282,7 +334,10 @@ final class Workspace: ObservableObject {
                 try ImageProcessor.previewResult(photo: loaded, quad: quad,
                                                  aspectWidth: aspect.width, aspectHeight: aspect.height)
             }
-            if token == resultToken { resultImage = image }
+            if token == resultToken {
+                resultImage = image
+                if image == nil { resultError = "Couldn't straighten this photo. Try moving the corners." }
+            }
         }
     }
 

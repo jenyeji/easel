@@ -200,7 +200,7 @@ struct CanvasView: View {
                         ), chartGrid: chartGrid)
                     }
                 case .result:
-                    ResultView(image: workspace.resultImage)
+                    ResultView(image: workspace.resultImage, message: workspace.resultProblem)
                 }
             }
 

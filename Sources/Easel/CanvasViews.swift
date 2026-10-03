@@ -192,6 +192,8 @@ struct CornerEditorView: View {
 
 struct ResultView: View {
     let image: CGImage?
+    /// Shown instead of the spinner when the result can't be made (for example, no size picked).
+    var message: String? = nil
 
     var body: some View {
         GeometryReader { geo in
@@ -204,6 +206,17 @@ struct ResultView: View {
                     .frame(width: fit.width, height: fit.height)
                     .shadow(color: .black.opacity(0.4), radius: 10, y: 4)
                     .position(x: fit.midX, y: fit.midY)
+            } else if let message {
+                VStack(spacing: 12) {
+                    Image(systemName: "rectangle.dashed")
+                        .font(.system(size: 40, weight: .light))
+                    Text(message)
+                        .font(.title3)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: 360)
+                }
+                .foregroundColor(Color(white: 0.75))
+                .position(x: geo.size.width / 2, y: geo.size.height / 2)
             } else {
                 ProgressView()
                     .position(x: geo.size.width / 2, y: geo.size.height / 2)
