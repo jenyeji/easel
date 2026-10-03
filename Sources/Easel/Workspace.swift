@@ -30,6 +30,10 @@ final class Workspace: ObservableObject {
     @Published var edit = PhotoEdit() {
         didSet {
             if edit != oldValue { scheduleLibrarySave() }
+            // Once you pick a size yourself, the note about the guessed size no longer applies.
+            if let guess = sizeGuess, edit.presetID != guess.presetID || edit.useCustomSize {
+                clearSizeGuessNote()
+            }
             if edit.colorFix != oldValue.colorFix || edit.isChecker != oldValue.isChecker {
                 refreshColorFix()
             }
@@ -60,6 +64,8 @@ final class Workspace: ObservableObject {
     @Published var resultError: String?
     /// Turns on after pressing Save with the title or size missing, so those fields are marked.
     @Published var showMissingFields = false
+    /// The size Easel guessed for the open photo, and the note it showed about it.
+    var sizeGuess: (presetID: UUID, note: String)?
     @Published var status: String?
     @Published var errorMessage: String?
     /// A camera memory card that was just plugged in. Setting this shows the "Import?" question.
@@ -180,6 +186,7 @@ final class Workspace: ObservableObject {
         viewMode = .corners
         errorMessage = nil
         showMissingFields = false
+        clearSizeGuessNote()
 
         guard let index = selectedIndex else { return }
         edit = items[index].edit ?? previousEdit.carriedOver()
@@ -266,7 +273,15 @@ final class Workspace: ObservableObject {
               let quad = edit.quad, let pixelSize = photo?.pixelSize,
               let preset = closestPreset(to: quad, imageSize: pixelSize) else { return }
         edit.presetID = preset.id
-        status = "No size was picked, so Easel chose \(preset.label), the closest to the painting's shape. Change it if that's not right."
+        let note = "No size was picked, so Easel chose \(preset.label), the closest to the painting's shape. Change it if that's not right."
+        status = note
+        sizeGuess = (preset.id, note)
+    }
+
+    /// Removes the guessed-size note, unless another message has replaced it.
+    func clearSizeGuessNote() {
+        if let guess = sizeGuess, status == guess.note { status = nil }
+        sizeGuess = nil
     }
 
     private func closestPreset(to quad: Quad, imageSize: CGSize) -> SizePreset? {
