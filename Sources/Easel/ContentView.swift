@@ -290,7 +290,10 @@ struct InspectorView: View {
                     CheckerPanel()
                 } else {
                 Section("Painting") {
-                    TextField("Title", text: $workspace.edit.title, prompt: Text("Sunset over Pescadero"))
+                    TextField("Title", text: $workspace.edit.title, prompt: Text("Required"))
+                    if workspace.showMissingFields && workspace.isTitleMissing {
+                        requiredNote("Add a title. It's used in the file name and saved inside the JPG.")
+                    }
                     TextField("Artist", text: $workspace.edit.artist,
                               prompt: Text(settings.artistName.isEmpty ? "Optional" : settings.artistName))
                         .help("Leave empty to use the default artist from Settings (shown in grey).")
@@ -318,6 +321,11 @@ struct InspectorView: View {
                 }
 
                 Section("Canvas size") {
+                    if workspace.showMissingFields && workspace.isSizeMissing {
+                        requiredNote(workspace.edit.useCustomSize
+                                     ? "Type the custom size, in inches."
+                                     : "Pick the canvas size.")
+                    }
                     Picker("Size", selection: sizeChoice) {
                         ForEach(settings.presets) { preset in
                             Text(preset.label).tag(preset.id.uuidString)
@@ -397,7 +405,12 @@ struct InspectorView: View {
                     .disabled(!workspace.canSave)
                     .help(saveAgainHelp)
                 } else {
-                    if workspace.hasChangesSinceSave {
+                    if workspace.showMissingFields, let missing = workspace.missingBeforeSave {
+                        Label(missing, systemImage: "exclamationmark.circle.fill")
+                            .font(.callout.weight(.medium))
+                            .foregroundColor(.red)
+                            .frame(maxWidth: .infinity)
+                    } else if workspace.hasChangesSinceSave {
                         Text(workspace.savedInAnotherFolder
                              ? "Saved before, but in a different folder."
                              : "Changed since you last saved.")
@@ -429,6 +442,12 @@ struct InspectorView: View {
             .animation(.easeInOut(duration: 0.2), value: workspace.isCurrentPhotoSaved)
             }
         }
+    }
+
+    private func requiredNote(_ text: String) -> some View {
+        Label(text, systemImage: "exclamationmark.circle.fill")
+            .font(.callout)
+            .foregroundColor(.red)
     }
 
     // MARK: Color

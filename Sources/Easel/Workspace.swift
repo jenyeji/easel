@@ -58,6 +58,8 @@ final class Workspace: ObservableObject {
     @Published var resultImage: CGImage?
     /// Set when the After view couldn't be made.
     @Published var resultError: String?
+    /// Turns on after pressing Save with the title or size missing, so those fields are marked.
+    @Published var showMissingFields = false
     @Published var status: String?
     @Published var errorMessage: String?
     /// A camera memory card that was just plugged in. Setting this shows the "Import?" question.
@@ -177,6 +179,7 @@ final class Workspace: ObservableObject {
         resultImage = nil
         viewMode = .corners
         errorMessage = nil
+        showMissingFields = false
 
         guard let index = selectedIndex else { return }
         edit = items[index].edit ?? previousEdit.carriedOver()
@@ -351,8 +354,23 @@ final class Workspace: ObservableObject {
 
     // MARK: Saving
 
+    /// Title and size must be filled in before saving. Missing ones are pointed out when you press Save.
     var canSave: Bool {
-        photo != nil && edit.quad != nil && edit.aspect(presets: settings.presets) != nil && !isSaving && !edit.isChecker
+        photo != nil && edit.quad != nil && !isSaving && !edit.isChecker
+    }
+
+    var isTitleMissing: Bool { edit.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    var isSizeMissing: Bool { edit.sides(presets: settings.presets) == nil }
+
+    /// "Add a title and pick a canvas size before saving.", or nil when nothing is missing.
+    var missingBeforeSave: String? {
+        let size = edit.useCustomSize ? "type the custom size" : "pick a canvas size"
+        switch (isTitleMissing, isSizeMissing) {
+        case (true, true): return "Add a title and \(size) before saving."
+        case (true, false): return "Add a title before saving."
+        case (false, true): return "Please \(size) before saving."
+        case (false, false): return nil
+        }
     }
 
     /// The name the naming style would give this photo (ignoring any typed name).
@@ -375,7 +393,14 @@ final class Workspace: ObservableObject {
     }
 
     func save() {
-        guard canSave, let loaded = photo, let quad = edit.quad,
+        guard canSave else { return }
+        if missingBeforeSave != nil {
+            // Shows the note above the Save button and marks the missing fields in red.
+            showMissingFields = true
+            NSSound.beep()
+            return
+        }
+        guard let loaded = photo, let quad = edit.quad,
               let aspect = edit.aspect(presets: settings.presets),
               let index = selectedIndex else { return }
 

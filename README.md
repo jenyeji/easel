@@ -29,7 +29,7 @@ A small Mac app for photographing paintings. Open a photo (RAW or JPG), drag the
 3. Fill in the **title**, **artist**, **date** (year, and month if you know it), and anything else you use (medium, record ID), and pick the **canvas size**. Portrait or landscape is guessed for you. If no size is picked yet, Easel picks the one closest to the painting's shape and tells you. When two sizes have the same shape (like 8x10 and 16x20), it picks the one you've used most. Leave Artist or Medium empty to use your defaults from Settings (shown in grey).
 4. Press **After** (or ⌘B) to check the straightened result.
 5. Check the **file name**. Pick a style from the menu (like Title_Date_Artist), or type a name for just this photo. Below that, **Save to** shows where the files will go. Click the folder name to switch to a recent folder, or choose a new one.
-6. Press **Save JPGs** (⌘S). Easel saves both files and moves to the next photo. When you come back to a saved photo, the panel shows a green **Saved** check and the button changes to **Save Again**, which makes another copy. If you change anything, the button turns blue again.
+6. Press **Save JPGs** (⌘S). A title and canvas size are required. If one is missing, Easel says so and marks it in red. Easel saves both files and moves to the next photo. When you come back to a saved photo, the panel shows a green **Saved** check and the button changes to **Save Again**, which makes another copy. If you change anything, the button turns blue again.
 
 Handy keys: ⌘[ and ⌘] go to the previous and next photo, ⌘E finds the edges again.
 
