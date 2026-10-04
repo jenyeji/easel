@@ -40,7 +40,7 @@ Easel remembers your photo list. Quit and reopen, and every photo is still there
 If you have a ColorChecker (like the Calibrite ColorChecker Classic Mini), Easel can fix your photos' colors so the paint looks true to life.
 
 1. At the start of a session, take one photo of the checker in the same spot and light as your paintings, with the same camera settings. Take a new one if the light changes.
-2. In Easel, open that photo and turn on **Color checker photo** at the top of the right panel. Easel finds the chart and puts the corners on it. Drag them onto the outer corners of the colored squares (not the black frame) if needed. Each small white square on top should sit inside one color.
+2. In Easel, open that photo and turn on **Color checker photo** at the top of the right panel. Easel finds the chart's colored squares and puts the corners exactly on their outer corners. The chart can be at any angle, upside down, or as small as a twentieth of the photo's width. If it was missed, press **Find Chart Again** or **Auto-Find Edges** (⌘E), or drag the corners onto the outer corners of the colored squares (not the black frame) yourself. Each small white square on top should sit inside one color.
 3. The panel shows how well it worked: how far off the colors were, how close they are with the fix (under 2 is hard to see), and the chart's squares before and after. The dot in each square is the true color.
 4. Photos taken after the checker photo on the same day use its fix automatically, until the next checker photo. Each painting's **Color** menu shows which fix it's using. You can pick a different one or turn it off. Press **After** (⌘B) to see the result. The saved JPGs use it too.
 

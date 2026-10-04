@@ -318,6 +318,11 @@ final class Workspace: ObservableObject {
     // MARK: Corner tools
 
     func findEdges() {
+        // On a checker photo, the edges that matter are the chart's.
+        if edit.isChecker {
+            findChart()
+            return
+        }
         guard let loaded = photo else { return }
         let cg = loaded.previewCG
         let photoID = selectedID

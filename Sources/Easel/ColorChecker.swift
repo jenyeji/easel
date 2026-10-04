@@ -304,9 +304,27 @@ enum ChartReader {
         return ChartReading(quad: quad, fix: fix, unevenness: unevenness)
     }
 
-    /// Looks for the chart on its own. Tries each rectangle Vision finds, pulled in by a few amounts
-    /// (in case it found the chart's black frame instead of the squares), and keeps the best match.
+    /// Looks for the chart on its own and keeps the best match.
     static func find(in photo: LoadedPhoto, chart: ColorChart) -> ChartReading? {
+        // First look for the grid of colored squares itself. This puts the corners right on the squares' outer edges.
+        var best: ChartReading?
+        if let pixels = ChartFinder.Pixels(photo.previewCG) {
+            for corners in ChartFinder.find(in: pixels, columns: chart.columns, rows: chart.rows) {
+                let quad = Quad(topLeft: CGPoint(x: corners[0].x, y: corners[0].y),
+                                topRight: CGPoint(x: corners[1].x, y: corners[1].y),
+                                bottomRight: CGPoint(x: corners[2].x, y: corners[2].y),
+                                bottomLeft: CGPoint(x: corners[3].x, y: corners[3].y))
+                guard let reading = read(photo.preview, quad: quad, chart: chart) else { continue }
+                if best == nil || reading.score < best!.score { best = reading }
+            }
+        }
+        if let reading = best, reading.fix.isUsable { return reading }
+        return findRectangle(in: photo, chart: chart)
+    }
+
+    /// The older, rougher way: tries each rectangle Vision finds, pulled in by a few amounts
+    /// (in case it found the chart's black frame instead of the squares), and keeps the best match.
+    private static func findRectangle(in photo: LoadedPhoto, chart: ColorChart) -> ChartReading? {
         let request = VNDetectRectanglesRequest()
         request.maximumObservations = 6
         request.minimumSize = 0.04
@@ -405,6 +423,31 @@ enum ChartReader {
                 }
             }
         }
+    }
+}
+
+extension ChartFinder.Pixels {
+    /// The photo shrunk so its long side is at most `longEdge` pixels, as plain numbers for the chart finder.
+    init?(_ image: CGImage, longEdge: Int = 1600) {
+        let scale = min(1, Double(longEdge) / Double(max(image.width, image.height)))
+        let width = max(1, Int((Double(image.width) * scale).rounded()))
+        let height = max(1, Int((Double(image.height) * scale).rounded()))
+        var bytes = [UInt8](repeating: 0, count: width * height * 4)
+        let drawn = bytes.withUnsafeMutableBytes { buffer -> Bool in
+            guard let context = CGContext(data: buffer.baseAddress, width: width, height: height,
+                                          bitsPerComponent: 8, bytesPerRow: width * 4, space: ImageProcessor.sRGB,
+                                          bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return false }
+            context.interpolationQuality = .high
+            context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+            return true
+        }
+        guard drawn else { return nil }
+        var rgb: [SIMD3<Float>] = []
+        rgb.reserveCapacity(width * height)
+        for i in 0..<(width * height) {
+            rgb.append(SIMD3(Float(bytes[4 * i]), Float(bytes[4 * i + 1]), Float(bytes[4 * i + 2])) / 255)
+        }
+        self.init(width: width, height: height, rgb: rgb)
     }
 }
 
